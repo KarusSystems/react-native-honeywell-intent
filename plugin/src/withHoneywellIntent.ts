@@ -6,19 +6,58 @@ import {
 import fs from 'node:fs';
 import path from 'node:path';
 
+/**
+ * Symbologies the Data Collection Service can decode. Kept in sync with the
+ * `BarcodeDecoder` union in `src/types.ts` and the `DECODER_KEY` map in
+ * `android/.../ClaimRequest.kt`, which is where the firmware property names live.
+ */
 export type BarcodeDecoder =
+  // Linear
   | 'code128'
+  | 'gs1-128'
   | 'code39'
   | 'code93'
+  | 'code11'
+  | 'codabar'
+  | 'msi'
+  | 'telepen'
+  | 'trioptic'
+  | 'tlc39'
+  // Retail
   | 'ean8'
   | 'ean13'
   | 'upca'
   | 'upce'
+  | 'upce1'
+  // 2 of 5 family
+  | 'i2of5'
+  | 'matrix-25'
+  | 'standard-25'
+  | 'iata-25'
+  | 'hk-25'
+  // GS1 DataBar
+  | 'databar-14'
+  | 'databar-expanded'
+  | 'databar-limited'
+  | 'composite'
+  // Stacked linear
+  | 'pdf417'
+  | 'micropdf417'
+  | 'codablock-a'
+  | 'codablock-f'
+  // 2D
   | 'qrcode'
   | 'datamatrix'
-  | 'pdf417'
   | 'aztec'
-  | 'i2of5';
+  | 'maxicode'
+  | 'dotcode'
+  | 'hanxin'
+  | 'gridmatrix'
+  | 'digimarc'
+  | 'dpm'
+  // Postal
+  | 'postal'
+  | 'korea-post';
 
 export type ScannerTarget = 'dcs.scanner.imager' | 'dcs.scanner.ring';
 
@@ -41,9 +80,11 @@ export type HoneywellIntentOptions = {
 /**
  * Package visibility for the Data Collection Service.
  *
- * Scanning does not need these — claim/release/control broadcasts go to our own
- * package. They exist so diagnostics can identify and version the DCS package,
- * and so the troubleshooting screen can deep-link to its settings.
+ * Scanning needs these. The claim/release/control broadcasts are addressed to
+ * the DCS package, so the module must be able to see that package to name it —
+ * without visibility they degrade to implicit broadcasts, which never reach
+ * DCS's manifest-declared receiver on API 26+. Diagnostics and the deep-link to
+ * scanner settings depend on the same lookup.
  */
 const DCS_PACKAGES = [
   'com.intermec.datacollectionservice',
@@ -51,12 +92,37 @@ const DCS_PACKAGES = [
   'com.honeywell.dcs',
 ];
 
+/**
+ * Asking who handles the claim action is what keeps this working on devices
+ * whose DCS ships under a package name not in [DCS_PACKAGES]; that list is only
+ * the fallback for the same lookup.
+ */
+const CLAIM_ACTION = 'com.honeywell.aidc.action.ACTION_CLAIM_SCANNER';
+
+type AndroidName = { $: { 'android:name': string } };
+type QueryEntry = {
+  package?: AndroidName[];
+  intent?: Array<{ action?: AndroidName[] }>;
+};
+
 const withQueries: ConfigPlugin = (config) =>
   withAndroidManifest(config, (c) => {
     const manifest = c.modResults.manifest as unknown as {
-      queries?: Array<{ package?: Array<{ $: { 'android:name': string } }> }>;
+      queries?: QueryEntry[];
     };
     const queries = manifest.queries ?? [];
+
+    const hasClaimIntent = queries.some((q) =>
+      (q.intent ?? []).some((i) =>
+        (i.action ?? []).some((a) => a.$?.['android:name'] === CLAIM_ACTION)
+      )
+    );
+    if (!hasClaimIntent) {
+      queries.push({
+        intent: [{ action: [{ $: { 'android:name': CLAIM_ACTION } }] }],
+      });
+    }
+
     for (const name of DCS_PACKAGES) {
       const present = queries.some((q) =>
         (q.package ?? []).some((p) => p.$?.['android:name'] === name)

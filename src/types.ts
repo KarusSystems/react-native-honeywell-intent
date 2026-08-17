@@ -1,16 +1,58 @@
+/**
+ * Symbologies the Data Collection Service can decode.
+ *
+ * Anything not listed in an app's `decoders` is explicitly disabled on every
+ * claim rather than left as-is, so this list is also the exhaustive set of what
+ * the library controls. Names mirror the modern symbology names, not the
+ * firmware's property keys — `databar-*` is what the firmware still calls `RSS`.
+ */
 export type BarcodeDecoder =
+  // Linear
   | 'code128'
+  | 'gs1-128'
   | 'code39'
   | 'code93'
+  | 'code11'
+  | 'codabar'
+  | 'msi'
+  | 'telepen'
+  | 'trioptic'
+  | 'tlc39'
+  // Retail
   | 'ean8'
   | 'ean13'
   | 'upca'
   | 'upce'
+  | 'upce1'
+  // 2 of 5 family
+  | 'i2of5'
+  | 'matrix-25'
+  | 'standard-25'
+  | 'iata-25'
+  | 'hk-25'
+  // GS1 DataBar
+  | 'databar-14'
+  | 'databar-expanded'
+  | 'databar-limited'
+  | 'composite'
+  // Stacked linear
+  | 'pdf417'
+  | 'micropdf417'
+  | 'codablock-a'
+  | 'codablock-f'
+  // 2D
   | 'qrcode'
   | 'datamatrix'
-  | 'pdf417'
   | 'aztec'
-  | 'i2of5';
+  | 'maxicode'
+  | 'dotcode'
+  | 'hanxin'
+  | 'gridmatrix'
+  | 'digimarc'
+  | 'dpm'
+  // Postal
+  | 'postal'
+  | 'korea-post';
 
 export type BarcodeEvent = {
   data: string;

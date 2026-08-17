@@ -81,6 +81,28 @@ All values are optional; omit the file and the library defaults apply.
 | `profile` | `DEFAULT` | Named EZConfig profiles only |
 | `decoders` | `["code128"]` | Symbologies to enable; all others are explicitly disabled |
 
+### Symbologies
+
+Every symbology below is written on every claim — the ones you list as enabled,
+the rest as disabled. That matters when more than one app uses the scanner on a
+device: a Honeywell claim inherits whatever the previous claimant configured, so
+anything left unwritten would carry one app's settings into the next. Listing
+`decoders` therefore sets the reader's full state rather than adding to it.
+
+| Group | Values |
+| --- | --- |
+| Linear | `code128` `gs1-128` `code39` `code93` `code11` `codabar` `msi` `telepen` `trioptic` `tlc39` |
+| Retail | `ean8` `ean13` `upca` `upce` `upce1` |
+| 2 of 5 | `i2of5` `matrix-25` `standard-25` `iata-25` `hk-25` |
+| GS1 DataBar | `databar-14` `databar-expanded` `databar-limited` `composite` |
+| Stacked | `pdf417` `micropdf417` `codablock-a` `codablock-f` |
+| 2D | `qrcode` `datamatrix` `aztec` `maxicode` `dotcode` `hanxin` `gridmatrix` `digimarc` `dpm` |
+| Postal | `postal` `korea-post` |
+
+Check digits are transmitted for EAN-8/13 and UPC-A/E. Decoder sub-options —
+supplemental addenda, Code 39 full ASCII, Code 128 ISBT, video reverse — are
+pinned off and are not currently configurable.
+
 ## API
 
 | Export | Purpose |

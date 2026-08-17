@@ -1,12 +1,35 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <!--
-    Android 11+ package visibility. Scanning itself does not need these — the
-    claim/release/control broadcasts are sent to our own package and the Data
-    Collection Service replies to us. They exist so getDiagnostics() can see
-    which package hosts DCS and report its version, and so openScannerSettings()
-    can deep-link to it. Without them both degrade to "not found" on API 30+.
+    Required to talk to the Data Collection Service at all. Its IntentApiReceiver
+    is protected by this permission, so without it every claim, release and
+    control broadcast is dropped by the system with a Permission Denial in
+    logcat and nothing else — no exception, no failed promise, no callback. It is
+    declared by DCS at protection level `normal`, so it is granted at install
+    time and never needs a runtime request.
+
+    Declared here rather than in the config plugin so that bare React Native
+    consumers, which never run the plugin, inherit it from the manifest merge.
+  -->
+  <uses-permission android:name="com.honeywell.decode.permission.DECODE" />
+
+  <!--
+    Android 11+ package visibility.
+
+    Scanning genuinely needs these. The claim/release/control broadcasts are
+    addressed to the Data Collection Service's own package, so the module has to
+    be able to see that package to name it; without visibility the broadcasts
+    degrade to implicit, which never reaches DCS's manifest-declared receiver on
+    API 26+. Diagnostics and openScannerSettings() need them for the same reason.
+
+    The <intent> query is the one that matters: it asks "who handles the claim
+    action" rather than trusting a hardcoded package list, so it keeps working on
+    devices whose DCS ships under a name not listed below. The <package> entries
+    remain as a fallback for the same lookup.
   -->
   <queries>
+    <intent>
+      <action android:name="com.honeywell.aidc.action.ACTION_CLAIM_SCANNER" />
+    </intent>
     <package android:name="com.intermec.datacollectionservice" />
     <package android:name="com.honeywell.datacollectionservice" />
     <package android:name="com.honeywell.dcs" />

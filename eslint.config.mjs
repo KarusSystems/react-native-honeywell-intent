@@ -24,6 +24,8 @@ export default defineConfig([
     },
   },
   {
-    ignores: ['node_modules/', 'lib/'],
+    // Both are build output — `lib/` from bob, `plugin/build/` from `tsc -p
+    // plugin`. Linting either means `yarn prepare` leaves the tree failing lint.
+    ignores: ['node_modules/', 'lib/', 'plugin/build/'],
   },
 ]);

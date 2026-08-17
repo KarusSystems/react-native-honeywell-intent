@@ -53,6 +53,41 @@ class HoneywellIntentModule(
   /** Whether we believe we currently hold it. */
   @Volatile private var claimed: Boolean = false
 
+  /**
+   * The package hosting the Data Collection Service's intent API receiver.
+   *
+   * Claim, release and control broadcasts must be addressed to *DCS*, which is a
+   * different app. Addressing them to our own package — the obvious-looking
+   * `setPackage(reactContext.packageName)` — restricts delivery to components
+   * inside this app, where no such receiver exists, so every call silently
+   * reaches nobody. The scanner then keeps working for whichever app or wedge
+   * already holds it, which makes a delivery failure look like a decoder or
+   * configuration problem.
+   *
+   * Asking the PackageManager which receiver actually handles the claim action
+   * is the authoritative answer. [HoneywellIntents.DCS_PACKAGE_CANDIDATES] is a
+   * fallback for when package-visibility filtering hides the query result.
+   */
+  private val dcsPackage: String? by lazy {
+    reactContext.packageManager
+      .queryBroadcastReceivers(Intent(HoneywellIntents.ACTION_CLAIM_SCANNER), 0)
+      .firstOrNull()
+      ?.activityInfo
+      ?.packageName
+      ?: HoneywellIntents.DCS_PACKAGE_CANDIDATES.firstOrNull { packageExists(it) }
+  }
+
+  /**
+   * Build a Data Collection Intent API broadcast addressed to the service.
+   *
+   * When the package cannot be resolved the broadcast goes out implicitly rather
+   * than not at all. That is a long shot on API 26+, where implicit broadcasts
+   * do not reach manifest-declared receivers, but it is the only option left on
+   * a device whose DCS package we cannot see, and it costs nothing to try.
+   */
+  private fun dcsIntent(action: String): Intent =
+    Intent(action).apply { dcsPackage?.let { setPackage(it) } }
+
   private val receiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
       if (intent?.action == scanAction) handleScan(intent)
@@ -190,8 +225,7 @@ class HoneywellIntentModule(
   @ReactMethod
   fun triggerSoftScan(start: Boolean, promise: Promise) {
     try {
-      val intent = Intent(HoneywellIntents.ACTION_CONTROL_SCANNER).apply {
-        setPackage(reactContext.packageName)
+      val intent = dcsIntent(HoneywellIntents.ACTION_CONTROL_SCANNER).apply {
         putExtra(HoneywellIntents.EXTRA_SCAN, start)
       }
       reactContext.sendBroadcast(intent)
@@ -232,8 +266,7 @@ class HoneywellIntentModule(
   // ---- helpers ----
 
   private fun sendClaim() {
-    val intent = Intent(HoneywellIntents.ACTION_CLAIM_SCANNER).apply {
-      setPackage(reactContext.packageName)
+    val intent = dcsIntent(HoneywellIntents.ACTION_CLAIM_SCANNER).apply {
       putExtra(HoneywellIntents.EXTRA_SCANNER, scanner)
       putExtra(HoneywellIntents.EXTRA_PROFILE, profile)
       putExtra(
@@ -250,8 +283,7 @@ class HoneywellIntentModule(
   }
 
   private fun sendRelease() {
-    val intent = Intent(HoneywellIntents.ACTION_RELEASE_SCANNER).apply {
-      setPackage(reactContext.packageName)
+    val intent = dcsIntent(HoneywellIntents.ACTION_RELEASE_SCANNER).apply {
       putExtra(HoneywellIntents.EXTRA_SCANNER, scanner)
     }
     reactContext.sendBroadcast(intent)

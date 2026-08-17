@@ -25,6 +25,9 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "ESNext",
+    // `node` is needed by the tests that read the Kotlin and plugin sources off
+    // disk to check the decoder lists have not drifted apart.
+    "types": ["node"],
     "verbatimModuleSyntax": true
   },
   "exclude": ["node_modules", "lib", "plugin", "example", "example-bare", "example-shared"]
