@@ -1,0 +1,81 @@
+def DEFAULTS = [
+  kotlinVersion    : "1.7.22",
+  minSdkVersion    : 21,
+  compileSdkVersion: 33,
+  targetSdkVersion : 33,
+  agpVersion       : "7.3.1",
+]
+
+def safeExtGet = { prop ->
+  if (rootProject.ext.has(prop)) {
+    return rootProject.ext.get(prop)
+  }
+  return DEFAULTS[prop]
+}
+
+buildscript {
+  ext.DEFAULTS = [
+    kotlinVersion    : "1.7.22",
+    agpVersion       : "7.3.1",
+  ]
+  ext.safeExtGet = { prop ->
+    if (rootProject.ext.has(prop)) {
+      return rootProject.ext.get(prop)
+    }
+    return DEFAULTS[prop]
+  }
+
+  repositories {
+    google()
+    mavenCentral()
+  }
+
+  // Always declare the Kotlin classpath so bare-RN consumer apps (whose
+  // root build.gradle typically doesn't include Kotlin) can still compile
+  // this module. The AGP classpath can be omitted because the consumer
+  // app always provides one.
+  dependencies {
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${safeExtGet('kotlinVersion')}"
+  }
+}
+
+
+apply plugin: "com.android.library"
+apply plugin: "kotlin-android"
+
+android {
+  namespace "com.honeywellintent"
+
+  compileSdkVersion safeExtGet("compileSdkVersion")
+
+  defaultConfig {
+    minSdkVersion safeExtGet("minSdkVersion")
+    targetSdkVersion safeExtGet("targetSdkVersion")
+  }
+
+  buildFeatures {
+    buildConfig true
+  }
+
+  buildTypes {
+    release {
+      minifyEnabled false
+    }
+  }
+
+  lint {
+    disable "GradleCompatible"
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_1_8
+    targetCompatibility JavaVersion.VERSION_1_8
+  }
+}
+
+dependencies {
+  // `react-native` (the old artifact name) still resolves on RN 0.72+ as an
+  // alias for `react-android`, and is the only name available on RN 0.71.
+  //noinspection GradleDynamicVersion
+  implementation "com.facebook.react:react-native:+"
+}

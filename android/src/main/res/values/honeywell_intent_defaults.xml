@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Empty means "derive as <packageName>.SCAN" at runtime. -->
+    <string name="hwi_scan_action"></string>
+    <!-- dcs.scanner.imager (built-in) or dcs.scanner.ring (Bluetooth ring scanner). -->
+    <string name="hwi_scanner">dcs.scanner.imager</string>
+    <!-- Honeywell scanner profile to claim against; DEFAULT unless the device
+         has been provisioned with named profiles via EZConfig. -->
+    <string name="hwi_profile">DEFAULT</string>
+    <string-array name="hwi_enabled_decoders">
+        <item>code128</item>
+    </string-array>
+</resources>

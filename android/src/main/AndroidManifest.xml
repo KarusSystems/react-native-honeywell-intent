@@ -1,0 +1,14 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!--
+    Android 11+ package visibility. Scanning itself does not need these — the
+    claim/release/control broadcasts are sent to our own package and the Data
+    Collection Service replies to us. They exist so getDiagnostics() can see
+    which package hosts DCS and report its version, and so openScannerSettings()
+    can deep-link to it. Without them both degrade to "not found" on API 30+.
+  -->
+  <queries>
+    <package android:name="com.intermec.datacollectionservice" />
+    <package android:name="com.honeywell.datacollectionservice" />
+    <package android:name="com.honeywell.dcs" />
+  </queries>
+</manifest>
