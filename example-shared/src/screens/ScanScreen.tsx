@@ -38,9 +38,19 @@ export function ScanScreen() {
         )}
       </View>
 
+      {/*
+        Stop reading disables the trigger and keeps the claim, so the scanner
+        genuinely stops. Release hands the reader back instead — after which the
+        beam fires again under the device default, which is the whole reason the
+        two are separate buttons.
+      */}
       <View style={styles.buttonRow}>
         <Btn label="Start reading" onPress={scanner.startReading} primary />
         <Btn label="Stop reading" onPress={scanner.stopReading} />
+      </View>
+
+      <View style={styles.buttonRow}>
+        <Btn label="Release scanner" onPress={scanner.releaseReader} />
         <Btn label="Clear" onPress={clearHistory} />
       </View>
 

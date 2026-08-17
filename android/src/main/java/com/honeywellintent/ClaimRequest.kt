@@ -35,6 +35,23 @@ internal object HoneywellIntents {
   const val PROPERTY_DATA_INTENT = "DPR_DATA_INTENT"
   const val PROPERTY_DATA_INTENT_ACTION = "DPR_DATA_INTENT_ACTION"
 
+  /**
+   * Trigger control, which is the only thing that actually stops the reader.
+   *
+   * Releasing a claim does not disable anything — it hands the reader back, and
+   * the device default (typically Scan Wedge) picks it up, so the beam still
+   * fires and decoded data can still land in whatever field has focus. To make
+   * the trigger genuinely inert the claim must be *held* and this property set
+   * to [TRIGGER_DISABLE]; you cannot disable a reader you have given away.
+   *
+   * Values verified against the firmware string table alongside the decoder
+   * keys; the full accepted set is `disable`, `autoControl`, `clientControl` and
+   * `readOnRelease`.
+   */
+  const val PROPERTY_TRIGGER_CONTROL_MODE = "TRIG_CONTROL_MODE"
+  const val TRIGGER_AUTO_CONTROL = "autoControl"
+  const val TRIGGER_DISABLE = "disable"
+
   /** Extras on the barcode broadcast. */
   const val EXTRA_DATA = "data"
   const val EXTRA_CODE_ID = "codeId"
@@ -192,12 +209,24 @@ internal object ClaimRequest {
    */
   fun buildProperties(
     scanAction: String,
-    decoders: List<String>
+    decoders: List<String>,
+    triggerEnabled: Boolean
   ): Bundle {
     val enabled = decoders.mapNotNull { DECODER_KEY[it.lowercase()] }.toSet()
     return Bundle().apply {
       putBoolean(HoneywellIntents.PROPERTY_DATA_INTENT, true)
       putString(HoneywellIntents.PROPERTY_DATA_INTENT_ACTION, scanAction)
+      // Written only to disable. Setting it to `autoControl` — the value the
+      // firmware itself documents as the default — leaves the trigger dead on a
+      // CK65, verified on hardware: with the claim held and that property sent,
+      // a trigger pull starts no camera session at all. Omitting it entirely
+      // keeps whatever the reader already does, which is what "enabled" means.
+      if (!triggerEnabled) {
+        putString(
+          HoneywellIntents.PROPERTY_TRIGGER_CONTROL_MODE,
+          HoneywellIntents.TRIGGER_DISABLE
+        )
+      }
       DECODER_KEY.values.forEach { key -> putBoolean(key, key in enabled) }
       SUB_OPTION_KEYS.forEach { key -> putBoolean(key, false) }
       CHECK_DIGIT_TRANSMIT_KEYS.forEach { key -> putBoolean(key, true) }

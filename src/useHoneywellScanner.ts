@@ -5,6 +5,7 @@ import {
   claimScanner,
   getDiagnostics,
   releaseScanner,
+  setTriggerEnabled,
 } from './NativeHoneywellIntent';
 import {
   applyClaimState,
@@ -32,6 +33,8 @@ export type UseHoneywellScannerResult = {
   diagnostics: Diagnostics | null;
   startReading: () => void;
   stopReading: () => void;
+  /** Hand the reader back to the device default. See [releaseReader]. */
+  releaseReader: () => void;
   reconfigure: () => Promise<void>;
   refreshDiagnostics: () => Promise<Diagnostics | null>;
 };
@@ -45,6 +48,12 @@ export function useHoneywellScanner(
 
   /** Whether the consumer wants barcodes right now. */
   const wantsScannerRef = useRef(false);
+  /**
+   * Whether we are holding the reader. Distinct from [wantsScannerRef] because
+   * `stopReading` deliberately keeps the claim while wanting no barcodes; only
+   * this ref knows there is still something to hand back on unmount.
+   */
+  const holdsClaimRef = useRef(false);
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   const [isChecking, setIsChecking] = useState(true);
   const [phase, setPhase] = useState<ScannerPhase>('stopped');
@@ -90,14 +99,46 @@ export function useHoneywellScanner(
     return () => sub.remove();
   }, []);
 
+  /**
+   * Claim the reader and make its trigger live.
+   *
+   * One call rather than claim-then-enable: `setTriggerEnabled` claims if
+   * needed, so this is a single broadcast and cannot leave the reader claimed
+   * with a trigger still disabled from an earlier [stopReading].
+   */
   const startReading = useCallback(() => {
     wantsScannerRef.current = true;
+    holdsClaimRef.current = true;
     setPhase('claiming');
-    claimScanner().catch(() => {});
+    setTriggerEnabled(true).catch(() => {});
   }, []);
 
+  /**
+   * Stop scanning without giving the reader back.
+   *
+   * Releasing would look equivalent and is not: a released reader reverts to
+   * the device default, so the beam still fires and decoded data can land in
+   * whatever field has focus. Disabling the trigger while holding the claim is
+   * the only way to make scanning genuinely stop. Backgrounding still releases,
+   * so holding on to it here does not keep the reader from other apps.
+   *
+   * Use [releaseReader] when the intent is "I am done with the scanner".
+   */
   const stopReading = useCallback(() => {
     wantsScannerRef.current = false;
+    setPhase('stopped');
+    setTriggerEnabled(false).catch(() => {});
+  }, []);
+
+  /**
+   * Hand the reader back to the device default.
+   *
+   * The trigger works again afterwards — this is not a way to stop scanning,
+   * it is a way to stop *owning* the scanner.
+   */
+  const releaseReader = useCallback(() => {
+    wantsScannerRef.current = false;
+    holdsClaimRef.current = false;
     setPhase('stopped');
     releaseScanner().catch(() => {});
   }, []);
@@ -112,11 +153,15 @@ export function useHoneywellScanner(
   }, [runDiagnostics]);
 
   // Release on unmount. Without this the Data Collection Service keeps handing
-  // barcodes to a dead JS listener until the app itself stops.
+  // barcodes to a dead JS listener until the app itself stops. Keyed on the
+  // claim rather than on wanting barcodes: after `stopReading` the consumer
+  // wants nothing but we are still holding the reader, and that is exactly the
+  // case that must not leak.
   useEffect(() => {
     return () => {
-      if (wantsScannerRef.current) {
+      if (holdsClaimRef.current) {
         wantsScannerRef.current = false;
+        holdsClaimRef.current = false;
         releaseScanner().catch(() => {});
       }
     };
@@ -138,6 +183,7 @@ export function useHoneywellScanner(
     diagnostics,
     startReading,
     stopReading,
+    releaseReader,
     reconfigure,
     refreshDiagnostics: runDiagnostics,
   };

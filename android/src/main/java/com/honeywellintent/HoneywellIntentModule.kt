@@ -54,6 +54,14 @@ class HoneywellIntentModule(
   @Volatile private var claimed: Boolean = false
 
   /**
+   * Whether the hardware trigger should do anything. Survives pause/resume for
+   * the same reason [claimRequested] does: the re-claim on resume rebuilds the
+   * whole property bundle, so a disabled trigger that is not remembered here
+   * would quietly re-enable itself the first time the user switches apps.
+   */
+  @Volatile private var triggerEnabled: Boolean = true
+
+  /**
    * The package hosting the Data Collection Service's intent API receiver.
    *
    * Claim, release and control broadcasts must be addressed to *DCS*, which is a
@@ -114,9 +122,16 @@ class HoneywellIntentModule(
 
   // ---- lifecycle ----
   //
-  // The Data Collection Service revokes a claim when the claiming app leaves the
-  // foreground. Re-claiming on resume is not an optimisation; without it the
-  // scanner is silently dead after the first time the user switches apps.
+  // The Data Collection Service does NOT revoke a claim when the claiming app
+  // leaves the foreground — verified on a CK65: background the app while holding
+  // a claim with the trigger disabled and the reader stays dead for the whole
+  // device, with no release logged by the service. So the release has to be sent
+  // here, and the claim retaken on resume.
+  //
+  // Holding a claim in the background is antisocial even with the trigger live:
+  // barcodes keep being broadcast to a backgrounded app's action, and on a
+  // device where several apps share one reader that is somebody else's scans
+  // going missing.
 
   override fun onHostResume() {
     if (claimRequested && !claimed) sendClaim()
@@ -124,7 +139,12 @@ class HoneywellIntentModule(
 
   override fun onHostPause() {
     if (claimed) {
-      claimed = false
+      // Deliberately not [releaseScanner]: that resets [triggerEnabled] because
+      // the caller has finished with the reader. Backgrounding is not finishing,
+      // so the disable is kept and reapplied by the re-claim on resume — while
+      // the actual release hands the reader back so the rest of the device works
+      // normally in the meantime.
+      broadcastRelease()
       emitClaimState(false, "paused")
     }
   }
@@ -159,10 +179,26 @@ class HoneywellIntentModule(
     }
   }
 
+  /**
+   * Release the scanner, lifting any trigger disable with it.
+   *
+   * A disabled trigger cannot outlive the claim: the Data Collection Service
+   * hands the reader back to the device default, whose trigger works, and no
+   * property we set survives that. Verified on a CK65 — disable the trigger,
+   * release, and the beam fires again.
+   *
+   * So [triggerEnabled] is reset here rather than remembered. Keeping it false
+   * would leave the module reporting a disabled trigger while the hardware
+   * happily fires, and would silently re-disable on a later claim that the
+   * caller never asked to be disabled. Note this is deliberately not done in
+   * [onHostPause], which does not release: a disable *should* survive
+   * backgrounding and be reapplied by the re-claim on resume.
+   */
   @ReactMethod
   fun releaseScanner(promise: Promise) {
     try {
       claimRequested = false
+      triggerEnabled = true
       sendRelease()
       promise.resolve(true)
     } catch (t: Throwable) {
@@ -170,9 +206,42 @@ class HoneywellIntentModule(
     }
   }
 
+  /**
+   * Claim or release, whichever matches [claimed].
+   *
+   * Not named `setScannerEnabled`: releasing does not disable anything, since
+   * the reader reverts to the device default and keeps firing. [setTriggerEnabled]
+   * is the one that stops it.
+   */
   @ReactMethod
-  fun setScannerEnabled(enabled: Boolean, promise: Promise) {
-    if (enabled) claimScanner(promise) else releaseScanner(promise)
+  fun setScannerClaimed(claimed: Boolean, promise: Promise) {
+    if (claimed) claimScanner(promise) else releaseScanner(promise)
+  }
+
+  /**
+   * Make the hardware trigger inert, or live again, without giving up the claim.
+   *
+   * This is the difference between "this app has stopped listening" and "the
+   * scanner does nothing". [releaseScanner] does the former: the reader goes
+   * back to the device default, so the beam still fires on a trigger pull and
+   * decoded data can still reach whatever has focus. Use this instead when the
+   * scanner genuinely must not fire — a modal, a form mid-submit, a screen where
+   * a stray scan would be destructive.
+   *
+   * Disabling requires holding the claim, so this claims first if the caller has
+   * not already. Releasing afterwards hands the reader back and the device
+   * default resumes, trigger included; the disable lasts as long as the claim.
+   */
+  @ReactMethod
+  fun setTriggerEnabled(enabled: Boolean, promise: Promise) {
+    try {
+      triggerEnabled = enabled
+      claimRequested = true
+      sendClaim()
+      promise.resolve(true)
+    } catch (t: Throwable) {
+      promise.reject("HWI_SET_TRIGGER_FAILED", t.message, t)
+    }
   }
 
   /**
@@ -196,6 +265,7 @@ class HoneywellIntentModule(
       putString("profile", profile)
       putBoolean("claimRequested", claimRequested)
       putBoolean("claimed", claimed)
+      putBoolean("triggerEnabled", triggerEnabled)
     }
 
     val dcsPackage = HoneywellIntents.DCS_PACKAGE_CANDIDATES.firstOrNull { packageExists(it) }
@@ -271,7 +341,7 @@ class HoneywellIntentModule(
       putExtra(HoneywellIntents.EXTRA_PROFILE, profile)
       putExtra(
         HoneywellIntents.EXTRA_PROPERTIES,
-        ClaimRequest.buildProperties(scanAction, decoders)
+        ClaimRequest.buildProperties(scanAction, decoders, triggerEnabled)
       )
     }
     reactContext.sendBroadcast(intent)
@@ -282,12 +352,16 @@ class HoneywellIntentModule(
     emitClaimState(true, "claimed")
   }
 
-  private fun sendRelease() {
+  private fun broadcastRelease() {
     val intent = dcsIntent(HoneywellIntents.ACTION_RELEASE_SCANNER).apply {
       putExtra(HoneywellIntents.EXTRA_SCANNER, scanner)
     }
     reactContext.sendBroadcast(intent)
     claimed = false
+  }
+
+  private fun sendRelease() {
+    broadcastRelease()
     emitClaimState(false, "released")
   }
 

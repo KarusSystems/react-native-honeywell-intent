@@ -18,6 +18,7 @@ const diagnostics = (overrides: Partial<Diagnostics> = {}): Diagnostics => ({
   profile: 'DEFAULT',
   claimRequested: false,
   claimed: false,
+  triggerEnabled: true,
   available: true,
   ...overrides,
 });

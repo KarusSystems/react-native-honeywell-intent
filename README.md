@@ -13,12 +13,13 @@ question and forces consumers to carry a binary they cannot audit or update.
 The Intent API needs no dependency at all, so this installs and autolinks like
 any other package.
 
-> ⚠️ **Pre-hardware release.** Written against Honeywell's Data Collection
-> Intent API guide and cross-checked with existing intent-based implementations,
-> but not yet run on a physical device. The symbology property keys in
+> **Hardware-verified** on a Honeywell CK65 (Android 8.1, Data Collection
+> Service 1.95.00.0039): claim, release, decoder configuration, check digit
+> transmission, trigger disable and barcode delivery all exercised on the
+> device. Every property key is checked against the string table of the
+> device's own `DataCollectionService.apk` rather than inferred — see
 > [`ClaimRequest.kt`](android/src/main/java/com/honeywellintent/ClaimRequest.kt)
-> are the least certain part and are isolated in one map for exactly that
-> reason. Treat 0.1.x as unverified.
+> for the command to re-verify against other firmware.
 
 ## Install
 
@@ -44,6 +45,23 @@ function ScanScreen() {
 
 The hook claims the scanner on mount, re-claims it when the app returns to the
 foreground, and releases it on unmount.
+
+### Stopping the scanner
+
+Three different things are easy to confuse, and only one of them actually stops
+the reader:
+
+| Call | Effect |
+| --- | --- |
+| `stopReading()` | Disables the trigger, **keeps the claim**. The scanner genuinely stops. |
+| `releaseReader()` | Hands the reader back. The beam fires again under the device default. |
+| backgrounding | Releases automatically, re-claims on resume. Handled for you. |
+
+`releaseReader()` is not a way to stop scanning. A released reader reverts to the
+device default — typically Scan Wedge — so the trigger still fires and decoded
+text can land in whatever field has focus. Use `stopReading()` for a screen where
+a stray scan would be destructive, and `releaseReader()` only when you are done
+with the scanner entirely.
 
 ## Configuration
 
@@ -110,7 +128,8 @@ pinned off and are not currently configurable.
 | `useHoneywellScanner(options)` | Hook: claim lifecycle, barcode delivery, diagnostics |
 | `claimScanner()` | Claim the reader and apply the configured decoders |
 | `releaseScanner()` | Release the reader |
-| `setScannerEnabled(enabled)` | Claim or release, whichever matches |
+| `setScannerClaimed(claimed)` | Claim or release, whichever matches |
+| `setTriggerEnabled(enabled)` | Make the trigger inert while keeping the claim |
 | `triggerSoftScan(start)` | Start/stop the beam without the hardware trigger |
 | `getDiagnostics()` | Device and claim state snapshot |
 | `openScannerSettings()` | Deep-link to the Data Collection Service's settings |
@@ -126,11 +145,16 @@ and worth understanding rather than papering over:
 
 **Claim is a session, not a profile.** A DataWedge profile is written once and
 persists on the device across reboots. A Honeywell claim is held by one app at a
-time and is revoked the moment that app backgrounds. That is why the entry point
-is `claimScanner()` and not `configureProfile()` — calling it once at startup and
-assuming the device stays configured is the single most common way to end up with
-a scanner that mysteriously stops working after a task switch. The native module
-re-claims on resume so you do not have to, and `addClaimStateListener` reports it.
+time. That is why the entry point is `claimScanner()` and not `configureProfile()`
+— calling it once at startup and assuming the device stays configured is the
+single most common way to end up with a scanner that mysteriously stops working.
+
+Note the Data Collection Service does **not** revoke a claim when the holding app
+backgrounds — verified on a CK65, where a backgrounded app holding a claim with
+its trigger disabled left the reader dead for the entire device. This library
+therefore releases on pause itself and re-claims on resume, so a backgrounded app
+never keeps the scanner from the rest of the device. `addClaimStateListener`
+reports both transitions.
 
 **Diagnostics are thinner.** DataWedge is a separate installable app that answers
 questions about itself — is it enabled, does the profile exist, what version. The

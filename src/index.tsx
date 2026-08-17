@@ -5,7 +5,8 @@ export {
   getDiagnostics,
   openScannerSettings,
   releaseScanner,
-  setScannerEnabled,
+  setScannerClaimed,
+  setTriggerEnabled,
   triggerSoftScan,
 } from './NativeHoneywellIntent';
 export { useHoneywellScanner } from './useHoneywellScanner';

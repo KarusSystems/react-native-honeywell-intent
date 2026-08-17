@@ -127,6 +127,17 @@ export type Diagnostics = {
    * not a confirmation from the device.
    */
   claimed: boolean;
+  /**
+   * Whether the hardware trigger is live.
+   *
+   * False only while an explicit `setTriggerEnabled(false)` is in effect, which
+   * requires the claim to be held. Releasing the scanner resets this to true,
+   * because a released reader reverts to the device default and its trigger
+   * fires again — reporting false there would describe a state the hardware is
+   * not in. Backgrounding does not reset it: the claim is retaken on resume and
+   * the disable with it.
+   */
+  triggerEnabled: boolean;
   /** Whether this device can scan at all. Currently just `isHoneywellDevice`. */
   available: boolean;
 };

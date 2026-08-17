@@ -68,6 +68,14 @@ function diagnosticsToRows(d: Diagnostics | null): Row[] {
         : 'The claim is released whenever the app backgrounds and retaken on resume.',
     },
     {
+      label: 'Trigger',
+      ok: d.triggerEnabled,
+      value: d.triggerEnabled ? 'Live' : 'Disabled',
+      hint: d.triggerEnabled
+        ? undefined
+        : 'The claim is held but the trigger is inert. Releasing the scanner would NOT restore this state — it hands the reader back to the device default, whose trigger works.',
+    },
+    {
       label: 'Reader',
       ok: true,
       value: d.scanner,
