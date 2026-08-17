@@ -46,6 +46,75 @@ function ScanScreen() {
 The hook claims the scanner on mount, re-claims it when the app returns to the
 foreground, and releases it on unmount.
 
+### Scanner lifecycle
+
+The reader is in one of three states. The counterintuitive one is **Released**:
+handing the scanner back does not switch it off, it gives it to the device
+default — so the beam still fires and decoded text can still land in whatever
+field has focus.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Released
+
+    Released : Released
+    Released : Device default (Scan Wedge) owns the reader
+    Released : Beam FIRES · your app receives nothing
+
+    Scanning : Scanning
+    Scanning : Claim held · trigger live
+    Scanning : Beam fires · barcodes delivered to your app
+
+    Stopped : Stopped
+    Stopped : Claim held · trigger disabled
+    Stopped : Beam does NOT fire · nothing scans, anywhere
+
+    Released --> Scanning : startReading()
+    Scanning --> Stopped : stopReading()
+    Stopped --> Scanning : startReading()
+    Scanning --> Released : releaseReader()
+    Stopped --> Released : releaseReader()
+    Scanning --> Released : app backgrounds
+    Stopped --> Released : app backgrounds
+    Released --> Scanning : app resumes (was scanning)
+    Released --> Stopped : app resumes (was stopped)
+```
+
+Backgrounding always releases, and resuming restores the state you were in —
+including a disabled trigger.
+
+That release matters because the Data Collection Service does *not* revoke a
+claim when the holding app backgrounds. Holding it is harmless on its own — with
+a claim held from the background, Honeywell's own ScanDemo scanned normally in
+the foreground and no barcode leaked to the backgrounded app, so the service does
+arbitrate by foreground. What it will not do is undo a property. A trigger
+disabled by an app that then backgrounds stays disabled **for the whole device**
+until that app returns, which is why the library releases on pause rather than
+trusting the service to clean up after it.
+
+### Readiness is evidence, not assumption
+
+A claim is never acknowledged. The Intent API has no reply, no status action and
+no queryable service, and the Data Collection Service silently transfers the
+reader when another app claims it. So "claimed" is what the library *asked for*,
+and a delivered barcode is the only proof it worked.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Unconfirmed : claim sent
+    Unconfirmed : Unconfirmed
+    Unconfirmed : We asked for the reader · nothing has proved it
+    Confirmed : Confirmed
+    Confirmed : A barcode arrived · the claim was real
+    Unconfirmed --> Confirmed : barcode delivered
+    Confirmed --> Unconfirmed : new claim supersedes the proof
+```
+
+`isScanConfirmed` from the hook (and `diagnostics.scanConfirmed`) exposes this,
+so a UI can say "claimed, unconfirmed" rather than asserting a readiness nobody
+has verified. Both are computed locally — `getDiagnostics()` performs no
+round-trip and cannot block.
+
 ### Stopping the scanner
 
 Three different things are easy to confuse, and only one of them actually stops

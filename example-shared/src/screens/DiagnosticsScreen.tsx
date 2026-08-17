@@ -68,6 +68,14 @@ function diagnosticsToRows(d: Diagnostics | null): Row[] {
         : 'The claim is released whenever the app backgrounds and retaken on resume.',
     },
     {
+      label: 'Scan confirmed',
+      ok: d.scanConfirmed,
+      value: d.scanConfirmed ? 'Yes' : 'Not yet',
+      hint: d.scanConfirmed
+        ? 'A barcode has arrived since the current claim, which is the only real proof the reader is ours.'
+        : 'Nothing has proved the claim yet. The Intent API never acknowledges one, so "claimed" above is an assumption until a barcode arrives.',
+    },
+    {
       label: 'Trigger',
       ok: d.triggerEnabled,
       value: d.triggerEnabled ? 'Live' : 'Disabled',

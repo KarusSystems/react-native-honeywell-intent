@@ -138,6 +138,18 @@ export type Diagnostics = {
    * the disable with it.
    */
   triggerEnabled: boolean;
+  /**
+   * Whether a barcode has arrived since the current claim was sent — the only
+   * evidence that the claim is real.
+   *
+   * `claimed` is an assumption: the Intent API never acknowledges a claim, the
+   * Data Collection Service exposes nothing to query, and it silently transfers
+   * the reader when another app claims it. So `claimed && !scanConfirmed` means
+   * "we asked, and nothing has proved it yet" — worth showing as a distinct
+   * state rather than as ready. Resets on every claim, because a re-claim
+   * retires whatever the last one proved.
+   */
+  scanConfirmed: boolean;
   /** Whether this device can scan at all. Currently just `isHoneywellDevice`. */
   available: boolean;
 };

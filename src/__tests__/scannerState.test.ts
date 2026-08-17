@@ -19,6 +19,7 @@ const diagnostics = (overrides: Partial<Diagnostics> = {}): Diagnostics => ({
   claimRequested: false,
   claimed: false,
   triggerEnabled: true,
+  scanConfirmed: false,
   available: true,
   ...overrides,
 });
@@ -84,6 +85,15 @@ describe('applyClaimState', () => {
   it('is ready once the claim is held', () => {
     expect(applyClaimState({ claimed: true, reason: 'claimed' }, true)).toBe(
       'ready'
+    );
+  });
+
+  it('is stopped while the claim is held but scanning is not wanted', () => {
+    // `stopReading` disables the trigger and deliberately keeps the claim, which
+    // makes the module emit a fresh `claimed` event. Treating that as ready
+    // would report a scanner that cannot scan — its trigger is inert.
+    expect(applyClaimState({ claimed: true, reason: 'claimed' }, false)).toBe(
+      'stopped'
     );
   });
 

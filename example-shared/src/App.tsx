@@ -18,12 +18,13 @@ import {
 } from '@karus-systems/react-native-honeywell-intent';
 import { ScanScreen } from './screens/ScanScreen';
 import { DiagnosticsScreen } from './screens/DiagnosticsScreen';
+import { PlaygroundScreen } from './screens/PlaygroundScreen';
 import { AboutScreen } from './screens/AboutScreen';
 import { ScannerContext, type ScannerContextValue } from './context';
 
 export type RuntimeMode = 'expo' | 'bare';
 
-type Tab = 'scan' | 'diagnostics' | 'about';
+type Tab = 'scan' | 'playground' | 'diagnostics' | 'about';
 
 type Props = {
   runtimeMode: RuntimeMode;
@@ -81,6 +82,7 @@ function AppContent({ runtimeMode }: Props) {
         </View>
         <View style={styles.body}>
           {tab === 'scan' && <ScanScreen />}
+          {tab === 'playground' && <PlaygroundScreen />}
           {tab === 'diagnostics' && <DiagnosticsScreen />}
           {tab === 'about' && <AboutScreen />}
         </View>
@@ -91,7 +93,12 @@ function AppContent({ runtimeMode }: Props) {
             onPress={() => setTab('scan')}
           />
           <TabButton
-            label="Diagnostics"
+            label="API"
+            active={tab === 'playground'}
+            onPress={() => setTab('playground')}
+          />
+          <TabButton
+            label="Checks"
             active={tab === 'diagnostics'}
             onPress={() => setTab('diagnostics')}
           />

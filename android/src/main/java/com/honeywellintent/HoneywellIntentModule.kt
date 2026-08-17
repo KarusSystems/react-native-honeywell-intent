@@ -62,6 +62,25 @@ class HoneywellIntentModule(
   @Volatile private var triggerEnabled: Boolean = true
 
   /**
+   * Whether a barcode has arrived since the current claim was sent.
+   *
+   * The Intent API never acknowledges a claim, and the Data Collection Service
+   * exposes nothing to ask — its receiver handles claim, release and control and
+   * nothing else, and it registers no provider or service. So [claimed] is an
+   * assumption, and it can silently become wrong: when another app claims the
+   * reader the service transfers it without telling us.
+   *
+   * A delivered barcode is the one thing that cannot be assumed. It proves the
+   * claim was live at that moment, which is why it is tracked separately rather
+   * than folded into [claimed] — the two answer different questions, and
+   * conflating them is how "ready" ends up meaning "we sent a broadcast once".
+   *
+   * Reset on every claim rather than on release: a re-claim is the point at
+   * which the previous proof expires.
+   */
+  @Volatile private var scanConfirmed: Boolean = false
+
+  /**
    * The package hosting the Data Collection Service's intent API receiver.
    *
    * Claim, release and control broadcasts must be addressed to *DCS*, which is a
@@ -128,10 +147,14 @@ class HoneywellIntentModule(
   // device, with no release logged by the service. So the release has to be sent
   // here, and the claim retaken on resume.
   //
-  // Holding a claim in the background is antisocial even with the trigger live:
-  // barcodes keep being broadcast to a backgrounded app's action, and on a
-  // device where several apps share one reader that is somebody else's scans
-  // going missing.
+  // The disabled trigger is the part that does the damage, and it is worth being
+  // precise about why, because the obvious worry turns out to be wrong. Holding
+  // a claim with the trigger *live* does not starve anyone: with this app
+  // backgrounded and still holding, Honeywell's own ScanDemo scanned normally in
+  // the foreground and no barcode was broadcast to this app's action. The
+  // service arbitrates by foreground on its own. What it does not do is undo a
+  // property, so a trigger disabled by a backgrounded app stays disabled for
+  // every app on the device until that app comes back.
 
   override fun onHostResume() {
     if (claimRequested && !claimed) sendClaim()
@@ -266,6 +289,7 @@ class HoneywellIntentModule(
       putBoolean("claimRequested", claimRequested)
       putBoolean("claimed", claimed)
       putBoolean("triggerEnabled", triggerEnabled)
+      putBoolean("scanConfirmed", scanConfirmed)
     }
 
     val dcsPackage = HoneywellIntents.DCS_PACKAGE_CANDIDATES.firstOrNull { packageExists(it) }
@@ -347,8 +371,11 @@ class HoneywellIntentModule(
     reactContext.sendBroadcast(intent)
     // The Intent API does not acknowledge a claim, so this is an assumption, not
     // a confirmation. It is reported to JS as `claimed` with that caveat
-    // documented; the only real proof the reader is ours is a barcode arriving.
+    // documented; the only real proof the reader is ours is a barcode arriving,
+    // which is what [scanConfirmed] tracks — reset here because a new claim
+    // retires whatever the last one proved.
     claimed = true
+    scanConfirmed = false
     emitClaimState(true, "claimed")
   }
 
@@ -367,6 +394,9 @@ class HoneywellIntentModule(
 
   private fun handleScan(intent: Intent) {
     val data = intent.getStringExtra(HoneywellIntents.EXTRA_DATA) ?: return
+    // Proof the claim is live. Set before the event is emitted so a listener
+    // that immediately calls getDiagnostics() sees the scan that woke it.
+    scanConfirmed = true
     // codeId is Honeywell's single-character symbology id; aimId is the AIM
     // standard one. Prefer codeId to match what Honeywell's own docs show, and
     // fall back rather than reporting nothing.

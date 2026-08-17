@@ -14,10 +14,26 @@ export function ScanScreen() {
 
   return (
     <View style={styles.root}>
+      {/*
+        "Ready" is an assumption until a barcode proves it — the Intent API never
+        acknowledges a claim and offers nothing to query — so the ready state is
+        split in two rather than overstating what is known.
+      */}
       <View style={styles.statusBlock}>
-        <View style={[styles.statusDot, STATUS[scanner.scannerState].dot]} />
+        <View
+          style={[
+            styles.statusDot,
+            scanner.scannerState === 'ready' && !scanner.isScanConfirmed
+              ? styles.dotUnconfirmed
+              : STATUS[scanner.scannerState].dot,
+          ]}
+        />
         <Text style={styles.statusText}>
-          {STATUS[scanner.scannerState].label}
+          {scanner.scannerState === 'ready' && !scanner.isScanConfirmed
+            ? 'Claimed — unconfirmed until a scan arrives'
+            : scanner.scannerState === 'ready'
+              ? 'Scanning confirmed'
+              : STATUS[scanner.scannerState].label}
         </Text>
       </View>
 
@@ -129,6 +145,7 @@ const styles = StyleSheet.create({
   },
 
   statusText: { fontSize: 14, color: '#374151' },
+  dotUnconfirmed: { backgroundColor: '#F59E0B' },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,

@@ -38,15 +38,21 @@ export function hasScanner(diagnostics: Diagnostics | null): boolean {
  * revocation when the app backgrounds. A `paused` therefore drops us out of
  * ready — the scanner really is gone until the module re-claims on resume — but
  * it must not clear the user's intent to be scanning, which the caller tracks
- * separately.
+ * separately as [wantsScanning].
+ *
+ * Holding the claim is not the same as scanning, which is why [wantsScanning]
+ * decides the outcome before the event does. `stopReading` disables the trigger
+ * and deliberately keeps the reader, so it produces a fresh `claimed` event for
+ * a scanner that cannot scan; reporting that as ready would describe a state the
+ * hardware is not in.
  */
 export function applyClaimState(
   event: ClaimStateEvent,
-  claimRequested: boolean
+  wantsScanning: boolean
 ): ScannerPhase {
-  if (event.claimed) return 'ready';
+  if (!wantsScanning) return 'stopped';
   // Lost the reader while the user still wants it: we are between claims, not
   // stopped. Reporting 'stopped' here would make a task switch look like the
   // user had deliberately turned the scanner off.
-  return claimRequested ? 'claiming' : 'stopped';
+  return event.claimed ? 'ready' : 'claiming';
 }

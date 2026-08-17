@@ -29,6 +29,12 @@ export type UseHoneywellScannerResult = {
   hasHardwareScanner: boolean;
   isChecking: boolean;
   isScannerReady: boolean;
+  /**
+   * A barcode has arrived since the current claim. `isScannerReady` is an
+   * assumption — the Intent API never acknowledges a claim and cannot be
+   * queried — so this is the only evidence the reader is really yours.
+   */
+  isScanConfirmed: boolean;
   scannerState: ScannerState;
   diagnostics: Diagnostics | null;
   startReading: () => void;
@@ -57,6 +63,14 @@ export function useHoneywellScanner(
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   const [isChecking, setIsChecking] = useState(true);
   const [phase, setPhase] = useState<ScannerPhase>('stopped');
+  /**
+   * Whether a barcode has arrived since the current claim.
+   *
+   * Kept here as well as in `diagnostics` so it updates live: diagnostics is a
+   * snapshot taken on request, and the whole point of this flag is to stop the
+   * UI asserting readiness it has no evidence for.
+   */
+  const [isScanConfirmed, setIsScanConfirmed] = useState(false);
 
   const runDiagnostics = useCallback(async () => {
     try {
@@ -85,6 +99,8 @@ export function useHoneywellScanner(
   useEffect(() => {
     const sub = addBarcodeListener((event) => {
       if (!wantsScannerRef.current) return;
+      // Proof before delivery: a barcode is the only evidence the claim is real.
+      setIsScanConfirmed(true);
       callbackRef.current?.(event);
     });
     return () => sub.remove();
@@ -94,6 +110,8 @@ export function useHoneywellScanner(
   // This is the only readiness signal the Intent API affords us.
   useEffect(() => {
     const sub = addClaimStateListener((event) => {
+      // A fresh claim retires the previous proof, matching the native reset.
+      if (event.claimed) setIsScanConfirmed(false);
       setPhase(applyClaimState(event, wantsScannerRef.current));
     });
     return () => sub.remove();
@@ -179,6 +197,7 @@ export function useHoneywellScanner(
     hasHardwareScanner,
     isChecking,
     isScannerReady: phase === 'ready',
+    isScanConfirmed,
     scannerState: deriveScannerState({ isChecking, hasHardwareScanner, phase }),
     diagnostics,
     startReading,
