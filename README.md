@@ -231,6 +231,40 @@ Data Collection Service is firmware and answers nothing over the intent API. So
 `Diagnostics` here carries device facts and claim state only, all synchronous.
 There is no timeout, no "unknown" state, and correspondingly less to reconcile.
 
+## Supported devices
+
+The library treats a device as a Honeywell when `Build.MANUFACTURER` or
+`Build.BRAND` contains `honeywell` or `intermec`, and it talks to the Data
+Collection Service that those devices ship as firmware.
+
+**Tested on hardware.** A barcode was scanned on the real device with this
+library.
+
+| Device | Android | Data Collection Service | Library | Notes |
+|---|---|---|---|---|
+| Honeywell CK65 | 8.1 | 1.95.00.0039 | 0.1.0 | Claim, release, decoder configuration, trigger disable and barcode delivery all exercised. |
+| Honeywell CT30P | 11 | — | 0.1.0 | Hardware trigger scan confirmed in a production app. |
+
+**Should work, not verified.** These devices ship the same Data Collection
+Service, so the same Intent API is expected. Nobody has confirmed them on
+hardware yet.
+
+| Family | Models |
+|---|---|
+| CT30 | CT30 XP |
+| Mobility Edge handhelds | CT40, CT40 XP, CT45, CT45 XP, CT47, CT60, CT60 XP, CN80 |
+| ScanPal | EDA51, EDA52, EDA61K |
+| Intermec-branded | CN51, CK75 |
+
+The Data Collection Service package name differs between device generations.
+The library asks the PackageManager which receiver handles the claim action
+and uses a fixed candidate list only as a fallback, but an untested device can
+still surprise you. If you run this library on a device that is not in the
+tested table, please
+[open an issue](https://github.com/KarusSystems/react-native-honeywell-intent/issues)
+with the model, the Android version, the `getDiagnostics()` output and the
+result, so the device can move to the correct table.
+
 ## Alternatives and when to use them
 
 Honeywell exposes three scanning surfaces, in increasing order of capability:
